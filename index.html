@@ -290,6 +290,18 @@
   <div class="setup" style="margin:-4px 0 10px">Tap <b>✓</b> on a card when it's shiny enough (it pins to the top and is always kept) or <b>✕</b> when it isn't (it's hidden). These are <i>your</i> calls. Export and drop <code>ratings.json</code> in your repo and the poller obeys them on every run and device — your judgment steers the algorithm, not just this screen.</div>
   <button class="addbtn" id="exportRat" style="background:var(--card);color:var(--s3);border:1px solid var(--line)">⬇ Export ratings.json</button>
 
+  <h2 style="margin-top:22px">Teach it what you like <span id="likeCountBadge" style="color:var(--dim);font-weight:400"></span></h2>
+  <div class="setup" style="margin:-4px 0 10px">Give it examples of shiny things you love — paste <b>links</b> or add <b>photos</b>. When you export <code>liked.json</code> to your repo, the poller shows each one to an AI, works out what makes it shiny, and adds those fabric words to your filter automatically — so the feed learns your taste. <span id="learnNote" style="color:var(--s3)"></span></div>
+  <textarea id="likeLinks" placeholder="Paste product links you like — one per line" style="width:100%;min-height:64px;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px 11px;font-size:13px;outline:none;resize:vertical"></textarea>
+  <div class="miniaction" style="margin-top:8px">
+    <button id="addPics">＋ Add photos</button>
+    <button id="saveLikes">Save examples</button>
+  </div>
+  <input type="file" id="likeFiles" accept="image/*" multiple style="display:none">
+  <div id="likeList" style="margin:6px 0"></div>
+  <button class="addbtn" id="exportLiked" style="background:var(--card);color:var(--s3);border:1px solid var(--line)">⬇ Export liked.json</button>
+  <div class="setup" style="margin-top:7px;font-size:11.5px">AI learning needs an <code>ANTHROPIC_API_KEY</code> repo secret (pennies of usage). Without it, this list is just saved — the feed stays keyword-only.</div>
+
   <h2 style="margin-top:22px">Closet backup</h2>
   <div class="setup" style="margin:-4px 0 10px">Your owned + saved items live on this device. Export to back them up or move to another device.</div>
   <div class="miniaction">
@@ -351,6 +363,20 @@ function ratingsExport(){
   const shiny=[],matte=[];
   for(const k in RAT){RAT[k]===1?shiny.push(k):RAT[k]===-1?matte.push(k):0;}
   return {shiny,matte};
+}
+
+// ---- "Teach it": example links + photos of things you like ----
+const LIKED=JSON.parse(localStorage.getItem("nw.liked")||'{"links":[],"images":[]}');
+if(!LIKED.links)LIKED.links=[]; if(!LIKED.images)LIKED.images=[];
+function saveLiked(){localStorage.setItem("nw.liked",JSON.stringify(LIKED));}
+function likeCount(){return LIKED.links.length+LIKED.images.length;}
+function likedExport(){
+  // strip the data: prefix so the poller gets raw base64 + media type
+  const images=LIKED.images.map(im=>{
+    const m=/^data:([^;]+);base64,(.*)$/.exec(im.data||"");
+    return m?{media_type:m[1],data:m[2]}:null;
+  }).filter(Boolean);
+  return {links:LIKED.links.slice(),images};
 }
 
 // ---- digital closet: owned[] (manual) + saved[] (from feed) ----
@@ -528,7 +554,7 @@ function render(){
   if(goff && sort==="gloss") sort="rank";
   const rc=ratCounts();
   $("#ratCountBadge").textContent=(rc.s||rc.m)?`(${rc.s} shiny · ${rc.m} not)`:"";
-  renderMats(); renderShops(); renderExcluded();
+  renderMats(); renderShops(); renderExcluded(); renderLiked();
 }
 
 let _io=null;
@@ -770,6 +796,40 @@ function downloadJSON(obj,name){
 $("#exportEx").addEventListener("click",()=>downloadJSON(
   {items:EX.items,brands:EX.brands,keywords:EX.keywords},"excludes.json"));
 $("#exportRat").addEventListener("click",()=>downloadJSON(ratingsExport(),"ratings.json"));
+$("#exportLiked").addEventListener("click",()=>downloadJSON(likedExport(),"liked.json"));
+
+// ---- Teach-it panel wiring ----
+function renderLiked(){
+  const badge=$("#likeCountBadge"); if(badge)badge.textContent=likeCount()?`(${likeCount()})`:"";
+  const ll=$("#likeLinks"); if(ll&&document.activeElement!==ll)ll.value=LIKED.links.join("\n");
+  const wrap=$("#likeList"); if(!wrap)return;
+  wrap.innerHTML=LIKED.images.map((im,i)=>
+    `<span class="sz" style="display:inline-flex;align-items:center;gap:6px;margin:3px 4px 0 0">
+       <img src="${esc(im.data)}" style="width:22px;height:22px;object-fit:cover;border-radius:3px">
+       photo ${i+1}<button data-rmpic="${i}" style="background:none;border:none;color:var(--mut);cursor:pointer">✕</button></span>`
+  ).join("");
+  const ln=$("#learnNote");
+  if(ln)ln.textContent=(DATA&&DATA.learned_count)?`The AI has learned ${DATA.learned_count} shine word${DATA.learned_count>1?"s":""} from your likes so far.`:"";
+}
+$("#saveLikes").addEventListener("click",()=>{
+  LIKED.links=$("#likeLinks").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  saveLiked();renderLiked();alert("Saved. Export liked.json and drop it in your repo to let it learn.");
+});
+$("#addPics").addEventListener("click",()=>$("#likeFiles").click());
+$("#likeFiles").addEventListener("change",e=>{
+  const files=[...e.target.files];let left=files.length;
+  files.forEach(f=>{
+    const r=new FileReader();
+    r.onload=()=>{LIKED.images.push({data:r.result,media_type:f.type||"image/jpeg"});
+      if(--left===0){saveLiked();renderLiked();}};
+    r.readAsDataURL(f);
+  });
+  e.target.value="";
+});
+$("#likeList").addEventListener("click",e=>{
+  const b=e.target.closest("[data-rmpic]");if(!b)return;
+  LIKED.images.splice(+b.dataset.rmpic,1);saveLiked();renderLiked();
+});
 $("#exportCloset").addEventListener("click",()=>downloadJSON(CL,"closet.json"));
 $("#importCloset").addEventListener("click",()=>$("#importFile").click());
 $("#importFile").addEventListener("change",e=>{

@@ -425,6 +425,20 @@ def main():
     matte_set = set(ratings.get("matte", []))
     shiny_set = set(ratings.get("shiny", []))
 
+    # AI learning: turn things you LIKE (liked.json) into extra shine keywords and
+    # fold them into the allowlist. No-op unless ANTHROPIC_API_KEY is set.
+    learned_terms = []
+    try:
+        import learn
+        learned_terms = learn.run(HERE)
+    except Exception as e:
+        log(f"WARN learning step: {str(e)[:120]}")
+    if learned_terms:
+        st = tax.setdefault("shine_terms", {})
+        base = st.get("terms", [])
+        st["terms"] = list(dict.fromkeys(list(base) + list(learned_terms)))
+        log(f"allowlist: {len(base)} shipped + {len(learned_terms)} learned shine words")
+
     prev = {p["shop"] + "|" + p["pid"]: p for p in state.get("products", [])}
     alerted = set(state.get("alerted_ids", []))
     first_run = not state.get("products")
@@ -603,6 +617,7 @@ def main():
         "excluded_count": n_excluded,
         "disqualified_count": n_disqualified,
         "matte_fiber_count": n_matte_fiber,
+        "learned_count": len(learned_terms),
         "rated_matte_count": n_matte,
         "rated_shiny_count": sum(1 for p in current if p.get("pick")),
         "excludes_active": bool(excludes.get("items") or excludes.get("brands") or excludes.get("keywords")),
