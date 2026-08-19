@@ -1,5 +1,17 @@
 # NYLON WATCH — shiny-garment watcher
 
+> **DECOMMISSIONED — 2026-08-19.** This project is retired. The 30-minute
+> GitHub Actions poller has been deleted, so the watcher no longer fetches
+> shops, sends ntfy alerts, or commits state updates. The code and the last
+> `state.json` snapshot are kept here for reference only; nothing runs.
+>
+> The scheduled runs had been failing every 30 minutes since the AI-learning
+> commit (`git add learned.json` in the commit step aborts with
+> `pathspec 'learned.json' did not match any files` when the poller produces
+> no learned file), which is what generated the failure emails.
+>
+> Everything below describes the project as it worked while it was live.
+
 Finds shiny garments (gloss, satin, coated nylon, metallic, latex, PVC, patent,
 wet-look, taffeta…) across curated Shopify shops and alerts you to new drops and
 restocks even while the app is closed.
@@ -50,7 +62,7 @@ nylon-watch/
 ├─ state.json         # generated: live inventory + persistent memory
 ├─ imgcache.json      # generated: per-image gloss cache (only used if gloss is on)
 ├─ index.html         # the home-screen app (feed + closet)
-└─ .github/workflows/nylon-watch.yml   # 30-min cron, installs pillow/numpy, commits state
+└─ (removed) .github/workflows/nylon-watch.yml   # was the 30-min cron; deleted at decommission
 ```
 
 ## Excluding shops and items
